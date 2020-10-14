@@ -1,9 +1,7 @@
 import socket
 from _thread import *
-import sys
-from player import Player
 import pickle
-
+from game import Game
 
 
 server = "192.168.0.11"
@@ -17,54 +15,77 @@ except socket.error as error:
 this_socket.listen(2)
 print("Server started, waiting for a connection")
 
-players = [Player(0,0,50,50,(255,0,0)), Player(100,100,50,50,(0,0,255))]
+# Client IP addresses
+connected = set()
 
-newPlayerID = 0
-def threaded_client(connection, playerID):
-    global newPlayerID
-    print(playerID)
-    connection.send(pickle.dumps(players[playerID]))
+# dictionary of games
+games = {}
+
+# unique ID for games
+idCount = 0
+
+
+
+def threaded_client(connection, playerID, gameID):
+    global idCount
+    connection.send(str.encode(str(playerID)))
+
     reply = ""
     while True:
         try:
-            # Update players position. Can you do this buffered?
-            data = pickle.loads(connection.recv(2048))
-            players[playerID] = data
+            data = connection.recv(4096).decode()
+            
+            if gameID in games:
+                game = games[gameID]
 
-            if not data:
-                print("Disconnected")
-                break
-            else: 
-                if playerID == 1:
-                    reply = players[0]
+                if not data:
+                    print("No Data")
+                    break
                 else:
-                    reply = players[1]
-                print("Received: ", data)
-                print("Sending: ", reply)
-                print("PlayerID# ", playerID)
-
-            connection.sendall(pickle.dumps(reply))
+                    if data == "reset":
+                        print("Reseting game ", gameID)
+                        game.resetWent()
+                    elif data != "get":
+                        game.play(playerID, data)
+                    
+                    connection.sendall(pickle.dumps(game))
+            else:
+                print("Game ID not found in games list: ", gameID)
+                break
         except:
             break
+        
     print("Lost Connection")
-    newPlayerID -= 1
-    connection.close()
+    try:
+        del games[gameID]
+        print("Game closed ", gameID)
+    except:
+        print("Failed to close game ", gameID)
+    idCount -= 1
+    print("Next game will be ", gameID)
+    connection.close()    
 
-def read_position(string):
-    position = string.split(",")
-    return int(position[0]), int(position[1])
-
-def make_position(tuple):
-    return str(tuple[0]) + "," + str(tuple[1])
 
 
 while True:
     # object, ip address
     connection, address = this_socket.accept()
     print("Connected to: ", address)
+
+    idCount += 1
+    playerID = 0
+    gameID = (idCount - 1)//2
+    if idCount % 2 == 1:
+        games[gameID] = Game(gameID)
+        #connection.send(pickle.dumps(games[gameID]))
+        print(games[gameID])
+        print("Creating a new game, waiting for second player.")
+    else:
+        games[gameID].ready = True
+        playerID = 1
     
-    start_new_thread(threaded_client, (connection, newPlayerID))
-    newPlayerID += 1
+    start_new_thread(threaded_client, (connection, playerID, gameID))
+    
     
 
 

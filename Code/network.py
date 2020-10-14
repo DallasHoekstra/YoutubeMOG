@@ -7,21 +7,21 @@ class Network:
         self.server = "192.168.0.11"
         self.port = 5555
         self.addr = (self.server,self.port)
-        self.position = self.connect()
+        self.playerID = self.connect()
 
     def connect(self):
         try:
             self.client.connect(self.addr)
-            return pickle.loads(self.client.recv(2048))
+            return self.client.recv(2048).decode()
         except:
             pass
     
     def send(self, data):
         try:
-            self.client.send(pickle.dumps(data))
+            self.client.send(str.encode(data))
             return pickle.loads(self.client.recv(2048))
         except socket.error as error:
             print(error)
 
-    def get_position(self):
-        return self.position
+    def get_playerID(self):
+        return self.playerID
